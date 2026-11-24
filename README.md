@@ -20,7 +20,7 @@ Download the latest `.dmg` from [Releases](../../releases/latest) and follow the
 
 The app isn't notarised by Apple, so the first time you open it macOS will block it. Allow it once via **System Settings → Privacy & Security → Open Anyway**.
 
-Requires macOS 14 Sonoma or later.
+Requires macOS 14 Sonoma or later. Runs natively on both Apple silicon and Intel Macs.
 
 ## Building from source
 
@@ -32,7 +32,7 @@ The project is set to *Sign to Run Locally*, so it builds without an Apple devel
 
 ### Releasing
 
-Push a version tag and GitHub Actions builds the DMG and publishes the release:
+Push a version tag and GitHub Actions builds a universal DMG (Apple silicon and Intel) and publishes the release. The build fails if the app or the widget is missing either architecture.
 
 ```sh
 git tag v1.0.0

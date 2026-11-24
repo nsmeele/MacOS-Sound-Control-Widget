@@ -20,12 +20,24 @@ jobs:
             -project AudioSwitcher.xcodeproj \
             -scheme AudioSwitcher \
             -configuration Release \
+            -destination 'generic/platform=macOS' \
             -derivedDataPath build \
+            ARCHS="arm64 x86_64" \
+            ONLY_ACTIVE_ARCH=NO \
             MARKETING_VERSION="${GITHUB_REF_NAME#v}" \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY=- \
             DEVELOPMENT_TEAM= \
             build
+
+      - name: Verify universal binary
+        run: |
+          app=build/Build/Products/Release/AudioSwitcher.app
+          for bin in "$app/Contents/MacOS/AudioSwitcher" "$app"/Contents/PlugIns/*.appex/Contents/MacOS/*; do
+            archs=$(lipo -archs "$bin")
+            echo "$bin: $archs"
+            [[ "$archs" == *x86_64* && "$archs" == *arm64* ]] || { echo "Not universal: $bin"; exit 1; }
+          done
 
       - name: Package DMG
         run: |
