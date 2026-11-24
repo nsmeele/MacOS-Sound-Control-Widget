@@ -8,4 +8,4 @@
 
 You only need to do steps 2 and 3 once.
 
-Requires macOS 14 Sonoma or later.
+Requires macOS 14 Sonoma or later. Runs natively on both Apple silicon and Intel Macs.
