@@ -6,6 +6,7 @@ import WidgetKit
 /// (the sandboxed widget can't change audio settings itself) and refreshes the widget
 /// when audio devices come and go or the output is changed elsewhere.
 @main
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var pendingReload: DispatchWorkItem?
 
