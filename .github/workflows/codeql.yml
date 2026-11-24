@@ -16,6 +16,7 @@ jobs:
   analyze:
     name: Analyse (${{ matrix.language }})
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
