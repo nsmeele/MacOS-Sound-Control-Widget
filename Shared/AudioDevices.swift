@@ -1,3 +1,4 @@
+import AudioToolbox
 import CoreAudio
 import Foundation
 
@@ -9,7 +10,7 @@ struct AudioOutputDevice: Identifiable, Hashable {
 
     var symbol: String {
         let lowered = name.lowercased()
-        if lowered.contains("headphone") || lowered.contains("koptelefoon") || lowered.contains("airpods") {
+        if lowered.contains("headphone") || lowered.contains("koptelefoon") || lowered.contains("airpods") || lowered.contains("buds") {
             return "headphones"
         }
         switch transport {
@@ -30,7 +31,11 @@ struct AudioOutputDevice: Identifiable, Hashable {
 }
 
 enum AudioDevices {
+    /// Same step size as the keyboard volume keys.
+    static let volumeStep: Float = 1.0 / 16
+
     private static let system = AudioObjectID(kAudioObjectSystemObject)
+    private static let output = kAudioObjectPropertyScopeOutput
 
     private static func address(
         _ selector: AudioObjectPropertySelector,
@@ -40,10 +45,13 @@ enum AudioDevices {
         AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: element)
     }
 
-    /// All devices that can play audio, sorted by name.
+    // MARK: - Devices
+
+    /// Devices you can pick as sound output, sorted by name – the same list System Settings shows.
+    /// Virtual helper devices such as "Microsoft Teams Audio" mark themselves as not selectable and are left out.
     static func outputDevices() -> [AudioOutputDevice] {
         allDeviceIDs()
-            .filter { hasOutputStreams($0) && !isHidden($0) }
+            .filter { hasOutputStreams($0) && !isHidden($0) && canBeDefault($0) }
             .compactMap { id in
                 guard let uid = string(kAudioDevicePropertyDeviceUID, of: id),
                       let name = string(kAudioObjectPropertyName, of: id) else { return nil }
@@ -70,6 +78,40 @@ enum AudioDevices {
         return AudioObjectSetPropertyData(system, &addr, 0, nil, UInt32(MemoryLayout<AudioDeviceID>.size), &id) == noErr
     }
 
+    // MARK: - Volume
+
+    /// Volume of the current output (0...1), or nil when the device has no volume control.
+    static var volume: Float? {
+        guard let id = defaultOutputID() else { return nil }
+        var addr = address(kAudioHardwareServiceDeviceProperty_VirtualMainVolume, scope: output)
+        var value: Float32 = 0
+        var size = UInt32(MemoryLayout<Float32>.size)
+        guard AudioObjectHasProperty(id, &addr),
+              AudioObjectGetPropertyData(id, &addr, 0, nil, &size, &value) == noErr else { return nil }
+        return value
+    }
+
+    static var canSetVolume: Bool {
+        guard let id = defaultOutputID() else { return false }
+        return isSettable(address(kAudioHardwareServiceDeviceProperty_VirtualMainVolume, scope: output), on: id)
+    }
+
+    @discardableResult
+    static func setVolume(_ newValue: Float) -> Bool {
+        guard let id = defaultOutputID() else { return false }
+        var addr = address(kAudioHardwareServiceDeviceProperty_VirtualMainVolume, scope: output)
+        var value = Float32(min(max(newValue, 0), 1))
+        return AudioObjectSetPropertyData(id, &addr, 0, nil, UInt32(MemoryLayout<Float32>.size), &value) == noErr
+    }
+
+    /// One step louder or quieter. Turning it up also unmutes, like the keyboard keys do.
+    static func stepVolume(up: Bool) {
+        guard let current = volume else { return }
+        let target = ((current / volumeStep).rounded() + (up ? 1 : -1)) * volumeStep
+        setVolume(target)
+        if up, isMuted { setMuted(false) }
+    }
+
     // MARK: - Mute
 
     /// Whether the current output device can be muted at all (HDMI outputs often can't).
@@ -81,7 +123,7 @@ enum AudioDevices {
     static var isMuted: Bool {
         guard let id = defaultOutputID() else { return false }
         return muteElements(of: id).contains {
-            uint32(kAudioDevicePropertyMute, scope: kAudioObjectPropertyScopeOutput, element: $0, of: id) == 1
+            uint32(kAudioDevicePropertyMute, scope: output, element: $0, of: id) == 1
         }
     }
 
@@ -93,44 +135,44 @@ enum AudioDevices {
         guard !elements.isEmpty else { return false }
         var value: UInt32 = muted ? 1 : 0
         return elements.allSatisfy { element in
-            var addr = address(kAudioDevicePropertyMute, scope: kAudioObjectPropertyScopeOutput, element: element)
+            var addr = address(kAudioDevicePropertyMute, scope: output, element: element)
             return AudioObjectSetPropertyData(id, &addr, 0, nil, UInt32(MemoryLayout<UInt32>.size), &value) == noErr
         }
     }
 
     /// Most devices expose mute on the main element; some only per channel (left/right).
     private static func muteElements(of id: AudioDeviceID) -> [AudioObjectPropertyElement] {
-        func settable(_ element: AudioObjectPropertyElement) -> Bool {
-            var addr = address(kAudioDevicePropertyMute, scope: kAudioObjectPropertyScopeOutput, element: element)
-            var isSettable: DarwinBoolean = false
-            return AudioObjectHasProperty(id, &addr)
-                && AudioObjectIsPropertySettable(id, &addr, &isSettable) == noErr
-                && isSettable.boolValue
-        }
-        if settable(kAudioObjectPropertyElementMain) { return [kAudioObjectPropertyElementMain] }
-        return [1, 2].filter(settable)
+        let main = kAudioObjectPropertyElementMain
+        if isSettable(address(kAudioDevicePropertyMute, scope: output, element: main), on: id) { return [main] }
+        return [1, 2].filter { isSettable(address(kAudioDevicePropertyMute, scope: output, element: $0), on: id) }
     }
 
     // MARK: - Change notifications
 
     /// Calls `handler` on the main queue whenever devices appear/disappear, the default output
-    /// changes, or the default output is muted/unmuted.
+    /// changes, or the default output's volume or mute state changes.
     static func observeChanges(_ handler: @escaping () -> Void) {
-        var observedForMute = Set<AudioDeviceID>()
+        var observedDevices = Set<AudioDeviceID>()
 
-        func observeMuteOnDefaultDevice() {
-            guard let id = defaultOutputID(), observedForMute.insert(id).inserted else { return }
-            for element in muteElements(of: id) {
-                var addr = address(kAudioDevicePropertyMute, scope: kAudioObjectPropertyScopeOutput, element: element)
+        func observeDefaultDevice() {
+            guard let id = defaultOutputID(), observedDevices.insert(id).inserted else { return }
+            var addresses = muteElements(of: id).map { address(kAudioDevicePropertyMute, scope: output, element: $0) }
+            addresses.append(address(kAudioHardwareServiceDeviceProperty_VirtualMainVolume, scope: output))
+            for element: AudioObjectPropertyElement in [kAudioObjectPropertyElementMain, 1, 2] {
+                addresses.append(address(kAudioDevicePropertyVolumeScalar, scope: output, element: element))
+            }
+            for candidate in addresses {
+                var addr = candidate
+                guard AudioObjectHasProperty(id, &addr) else { continue }
                 AudioObjectAddPropertyListenerBlock(id, &addr, .main) { _, _ in handler() }
             }
         }
 
-        observeMuteOnDefaultDevice()
+        observeDefaultDevice()
         for selector in [kAudioHardwarePropertyDefaultOutputDevice, kAudioHardwarePropertyDevices] {
             var addr = address(selector)
             AudioObjectAddPropertyListenerBlock(system, &addr, .main) { _, _ in
-                observeMuteOnDefaultDevice()
+                observeDefaultDevice()
                 handler()
             }
         }
@@ -148,13 +190,25 @@ enum AudioDevices {
     }
 
     private static func hasOutputStreams(_ id: AudioDeviceID) -> Bool {
-        var addr = address(kAudioDevicePropertyStreams, scope: kAudioObjectPropertyScopeOutput)
+        var addr = address(kAudioDevicePropertyStreams, scope: output)
         var size: UInt32 = 0
         return AudioObjectGetPropertyDataSize(id, &addr, 0, nil, &size) == noErr && size > 0
     }
 
     private static func isHidden(_ id: AudioDeviceID) -> Bool {
         (uint32(kAudioDevicePropertyIsHidden, of: id) ?? 0) != 0
+    }
+
+    private static func canBeDefault(_ id: AudioDeviceID) -> Bool {
+        (uint32(kAudioDevicePropertyDeviceCanBeDefaultDevice, scope: output, of: id) ?? 0) != 0
+    }
+
+    private static func isSettable(_ addr: AudioObjectPropertyAddress, on id: AudioDeviceID) -> Bool {
+        var addr = addr
+        var settable: DarwinBoolean = false
+        return AudioObjectHasProperty(id, &addr)
+            && AudioObjectIsPropertySettable(id, &addr, &settable) == noErr
+            && settable.boolValue
     }
 
     private static func uint32(

@@ -1,3 +1,4 @@
+import AppIntents
 import SwiftUI
 import WidgetKit
 
@@ -14,6 +15,9 @@ struct OutputEntry: TimelineEntry {
     let date: Date
     let isMuted: Bool
     let canMute: Bool
+    /// nil when the current output has no volume control.
+    let volume: Float?
+    let canSetVolume: Bool
     let rows: [Row]
 
     static func current() -> OutputEntry {
@@ -22,10 +26,17 @@ struct OutputEntry: TimelineEntry {
             Row(id: $0.uid, name: $0.name, symbol: $0.symbol, isSelected: $0.id == selected)
         }
         guard !rows.isEmpty else { return sample }
-        return OutputEntry(date: .now, isMuted: AudioDevices.isMuted, canMute: AudioDevices.canMute, rows: rows)
+        return OutputEntry(
+            date: .now,
+            isMuted: AudioDevices.isMuted,
+            canMute: AudioDevices.canMute,
+            volume: AudioDevices.volume,
+            canSetVolume: AudioDevices.canSetVolume,
+            rows: rows
+        )
     }
 
-    static let sample = OutputEntry(date: .now, isMuted: false, canMute: true, rows: [
+    static let sample = OutputEntry(date: .now, isMuted: false, canMute: true, volume: 0.5, canSetVolume: true, rows: [
         Row(id: "a", name: "MacBook Pro Speakers", symbol: "speaker.wave.2", isSelected: true),
         Row(id: "b", name: "AirPods Pro", symbol: "headphones", isSelected: false),
         Row(id: "c", name: "Studio Display", symbol: "display", isSelected: false),
@@ -51,13 +62,14 @@ struct OutputWidgetView: View {
     @Environment(\.widgetFamily) private var family
     let entry: OutputEntry
 
+    /// How many device rows physically fit: small and medium widgets are only ~130pt tall
+    /// inside their margins. Medium uses two columns.
     private var rowsPerColumn: Int { family == .systemLarge ? 8 : 3 }
-    private var columnCount: Int { family == .systemSmall ? 1 : 2 }
-    private var columnsUsed: Int { family == .systemLarge ? 1 : columnCount }
+    private var columnCount: Int { family == .systemMedium ? 2 : 1 }
 
     /// Rows that fit, always keeping the active device visible.
     private var visibleRows: [OutputEntry.Row] {
-        let capacity = rowsPerColumn * columnsUsed
+        let capacity = rowsPerColumn * columnCount
         guard entry.rows.count > capacity else { return entry.rows }
         var rows = Array(entry.rows.prefix(capacity))
         if !rows.contains(where: \.isSelected), let selected = entry.rows.first(where: \.isSelected) {
@@ -67,19 +79,12 @@ struct OutputWidgetView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Text("Sound Output")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-                MuteButton(isMuted: entry.isMuted, canMute: entry.canMute)
-            }
+        VStack(alignment: .leading, spacing: 8) {
+            VolumeControls(entry: entry, showsPercentage: family != .systemSmall)
 
             let rows = visibleRows
             HStack(alignment: .top, spacing: 6) {
-                ForEach(0..<columnsUsed, id: \.self) { column in
+                ForEach(0..<columnCount, id: \.self) { column in
                     VStack(spacing: 4) {
                         ForEach(rows.dropFirst(column * rowsPerColumn).prefix(rowsPerColumn)) { row in
                             Button(intent: SelectOutputIntent(uid: row.id)) {
@@ -98,31 +103,95 @@ struct OutputWidgetView: View {
     }
 }
 
-private struct MuteButton: View {
-    let isMuted: Bool
-    let canMute: Bool
+/// Mute · − · volume bar · +
+private struct VolumeControls: View {
+    let entry: OutputEntry
+    let showsPercentage: Bool
 
     var body: some View {
-        if canMute {
-            Button(intent: SetMuteIntent(muted: !isMuted)) { icon }
+        HStack(spacing: 4) {
+            ControlButton(
+                systemImage: entry.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
+                label: entry.isMuted ? "Unmute" : "Mute",
+                intent: SetMuteIntent(muted: !entry.isMuted),
+                isEnabled: entry.canMute,
+                isHighlighted: entry.isMuted
+            )
+            ControlButton(
+                systemImage: "minus",
+                label: "Volume down",
+                intent: StepVolumeIntent(up: false),
+                isEnabled: entry.canSetVolume
+            )
+            VolumeBar(value: entry.volume ?? 0, isDimmed: entry.isMuted || entry.volume == nil)
+            if showsPercentage, let volume = entry.volume {
+                Text("\(Int((volume * 100).rounded()))%")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 32, alignment: .trailing)
+            }
+            ControlButton(
+                systemImage: "plus",
+                label: "Volume up",
+                intent: StepVolumeIntent(up: true),
+                isEnabled: entry.canSetVolume
+            )
+        }
+    }
+}
+
+private struct ControlButton<Intent: AppIntent>: View {
+    let systemImage: String
+    let label: String
+    let intent: Intent
+    let isEnabled: Bool
+    var isHighlighted = false
+
+    var body: some View {
+        if isEnabled {
+            Button(intent: intent) { icon }
                 .buttonStyle(.plain)
-                .accessibilityLabel(isMuted ? "Unmute" : "Mute")
+                .accessibilityLabel(label)
         } else {
-            // This output has no mute control (common with HDMI/DisplayPort).
+            // The current output has no control for this (common with HDMI/DisplayPort).
             icon.opacity(0.35)
         }
     }
 
     private var icon: some View {
-        Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+        Image(systemName: systemImage)
             .font(.caption.weight(.semibold))
-            .foregroundStyle(isMuted ? Color.red : Color.primary)
-            .frame(width: 30, height: 20)
+            .foregroundStyle(isHighlighted ? Color.red : Color.primary)
+            .frame(width: 26, height: 22)
             .background(
-                Capsule().fill(isMuted ? Color.red.opacity(0.22) : Color.primary.opacity(0.08))
+                Capsule().fill(isHighlighted ? Color.red.opacity(0.22) : Color.primary.opacity(0.08))
             )
             .contentShape(Capsule())
-            .widgetAccentable(isMuted)
+            .widgetAccentable(isHighlighted)
+    }
+}
+
+private struct VolumeBar: View {
+    let value: Float
+    let isDimmed: Bool
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.primary.opacity(0.1))
+                if value > 0 {
+                    Capsule()
+                        .fill(isDimmed ? Color.secondary : Color.accentColor)
+                        .frame(width: max(geometry.size.height, geometry.size.width * CGFloat(value)))
+                        .widgetAccentable()
+                }
+            }
+        }
+        .frame(height: 6)
+        .frame(maxWidth: .infinity)
+        .accessibilityElement()
+        .accessibilityLabel("Volume")
+        .accessibilityValue("\(Int((value * 100).rounded())) percent")
     }
 }
 
@@ -162,8 +231,8 @@ struct OutputWidget: Widget {
         StaticConfiguration(kind: "OutputWidget", provider: OutputProvider()) { entry in
             OutputWidgetView(entry: entry)
         }
-        .configurationDisplayName("Sound Output")
-        .description("Choose where your sound plays with a single click.")
+        .configurationDisplayName("Sound Control")
+        .description("Switch output, change the volume and mute with a single click.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }

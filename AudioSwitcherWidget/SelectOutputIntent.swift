@@ -14,8 +14,8 @@ struct SelectOutputIntent: AppIntent {
     }
 
     func perform() async throws -> some IntentResult {
-        AudioDevices.setDefaultOutput(uid: uid)
-        // WidgetKit reloads the widget automatically after an interactive intent.
+        // The background app does the actual switch and then reloads the widget.
+        AppMessage.post(AppMessage.selectOutput, value: uid)
         return .result()
     }
 }
@@ -34,7 +34,26 @@ struct SetMuteIntent: AppIntent {
     }
 
     func perform() async throws -> some IntentResult {
-        AudioDevices.setMuted(muted)
+        AppMessage.post(AppMessage.setMuted, value: muted ? "1" : "0")
+        return .result()
+    }
+}
+
+struct StepVolumeIntent: AppIntent {
+    static let title: LocalizedStringResource = "Change Volume"
+    static let isDiscoverable = false
+
+    @Parameter(title: "Louder")
+    var up: Bool
+
+    init() {}
+
+    init(up: Bool) {
+        self.up = up
+    }
+
+    func perform() async throws -> some IntentResult {
+        AppMessage.post(AppMessage.stepVolume, value: up ? "up" : "down")
         return .result()
     }
 }

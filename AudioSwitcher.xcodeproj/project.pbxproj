@@ -40,9 +40,21 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		AA0000000000000000000004 /* AudioSwitcher */ = {isa = PBXFileSystemSynchronizedRootGroup; path = AudioSwitcher; sourceTree = "<group>"; };
-		AA0000000000000000000005 /* AudioSwitcherWidget */ = {isa = PBXFileSystemSynchronizedRootGroup; path = AudioSwitcherWidget; sourceTree = "<group>"; };
-		AA0000000000000000000006 /* Shared */ = {isa = PBXFileSystemSynchronizedRootGroup; path = Shared; sourceTree = "<group>"; };
+		AA0000000000000000000004 /* AudioSwitcher */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = AudioSwitcher;
+			sourceTree = "<group>";
+		};
+		AA0000000000000000000005 /* AudioSwitcherWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = AudioSwitcherWidget;
+			sourceTree = "<group>";
+		};
+		AA0000000000000000000006 /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -262,7 +274,7 @@
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Audio Switcher";
+				INFOPLIST_KEY_CFBundleDisplayName = "Sound Control";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSUIElement = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -270,7 +282,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = local.audioswitcher;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.nsmeele.soundcontrol;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Debug;
@@ -285,7 +297,7 @@
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Audio Switcher";
+				INFOPLIST_KEY_CFBundleDisplayName = "Sound Control";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSUIElement = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -293,7 +305,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = local.audioswitcher;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.nsmeele.soundcontrol;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;
@@ -309,14 +321,14 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/Widget-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Sound Output";
+				INFOPLIST_KEY_CFBundleDisplayName = "Sound Control";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 					"@executable_path/../../../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = local.audioswitcher.widget;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.nsmeele.soundcontrol.widget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 			};
@@ -333,14 +345,14 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/Widget-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Sound Output";
+				INFOPLIST_KEY_CFBundleDisplayName = "Sound Control";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 					"@executable_path/../../../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = local.audioswitcher.widget;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.nsmeele.soundcontrol.widget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 			};

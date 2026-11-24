@@ -1,0 +1,43 @@
+name: Release
+
+# Push a tag such as v1.0.0 to build a DMG and publish it as a GitHub release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          xcodebuild \
+            -project AudioSwitcher.xcodeproj \
+            -scheme AudioSwitcher \
+            -configuration Release \
+            -derivedDataPath build \
+            MARKETING_VERSION="${GITHUB_REF_NAME#v}" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY=- \
+            DEVELOPMENT_TEAM= \
+            build
+
+      - name: Package DMG
+        run: |
+          mkdir dmg
+          ditto build/Build/Products/Release/AudioSwitcher.app "dmg/Sound Control.app"
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname "Sound Control" -srcfolder dmg -format UDZO "SoundControl-${GITHUB_REF_NAME}.dmg"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "SoundControl-${GITHUB_REF_NAME}.dmg" \
+            --title "Sound Control ${GITHUB_REF_NAME}" \
+            --notes-file .github/release-notes.md
